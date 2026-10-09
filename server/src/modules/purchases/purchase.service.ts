@@ -8,6 +8,11 @@ import {
   calculateWarrantyStatus,
 } from '../../utils/dateUtils.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { logger } from '../../utils/logger.js';
+import { PurchaseDocument } from '../documents/document.model.js';
+import { ServiceRecord } from '../services/service.model.js';
+import { Notification } from '../notifications/notification.model.js';
+import { getStorageProvider } from '../documents/storage/index.js';
 
 export class PurchaseService {
   static async createPurchase(userId: string, input: CreatePurchaseInput) {
@@ -216,7 +221,25 @@ export class PurchaseService {
 
   static async deletePurchase(userId: string, purchaseId: string) {
     const purchase = await this.getPurchaseById(userId, purchaseId);
-    await Purchase.deleteOne({ _id: purchase._id, userId: purchase.userId });
+
+    // Cascading cleanup of documents from storage and DB per PUR-046 / Part 15.1
+    const docs = await PurchaseDocument.find({ purchaseId: purchase._id });
+    const storage = getStorageProvider();
+    for (const doc of docs) {
+      try {
+        await storage.deleteFile(doc.storageKey);
+      } catch (err: any) {
+        logger.warn(`Failed to clean up storage file ${doc.storageKey}: ${err.message}`);
+      }
+    }
+
+    await Promise.all([
+      PurchaseDocument.deleteMany({ purchaseId: purchase._id }),
+      ServiceRecord.deleteMany({ purchaseId: purchase._id }),
+      Notification.deleteMany({ purchaseId: purchase._id }),
+      Purchase.deleteOne({ _id: purchase._id, userId: purchase.userId }),
+    ]);
+
     return { message: 'Purchase and associated history deleted successfully.' };
   }
 }
