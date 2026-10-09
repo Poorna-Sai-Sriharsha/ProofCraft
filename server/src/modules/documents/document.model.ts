@@ -64,9 +64,9 @@ const purchaseDocumentSchema = new Schema<IPurchaseDocument>(
     toJSON: {
       transform(_doc, ret) {
         ret.id = ret._id;
-        delete ret.__v;
+        delete (ret as any).__v;
         // Never expose internal storageKey to client
-        delete ret.storageKey;
+        delete (ret as any).storageKey;
         return ret;
       },
     },
