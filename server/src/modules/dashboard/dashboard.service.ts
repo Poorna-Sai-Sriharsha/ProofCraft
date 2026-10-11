@@ -91,6 +91,9 @@ export class DashboardService {
           _id: 0,
           category: '$_id.category',
           currency: '$_id.currency',
+          categoryLabel: {
+            $concat: ['$_id.category', ' (', '$_id.currency', ')'],
+          },
           amount: '$totalAmount',
           count: '$count',
         },

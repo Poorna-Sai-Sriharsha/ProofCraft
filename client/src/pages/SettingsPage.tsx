@@ -73,6 +73,9 @@ export default function SettingsPage() {
         newPassword: data.newPassword,
       });
       if (res.data.success) {
+        if (res.data.data?.token) {
+          localStorage.setItem('proofcart_token', res.data.data.token);
+        }
         toast.success('Password updated successfully.');
         resetPassword();
       }

@@ -144,4 +144,8 @@ purchaseSchema.index({ userId: 1, warrantyExpiryDate: 1 });
 purchaseSchema.index({ userId: 1, category: 1 });
 purchaseSchema.index({ userId: 1, archivedAt: 1 });
 
+// Background reminder job cron scan compound indexes (DB-04)
+purchaseSchema.index({ archivedAt: 1, warrantyExpiryDate: 1 });
+purchaseSchema.index({ archivedAt: 1, returnDeadline: 1 });
+
 export const Purchase: Model<IPurchase> = mongoose.model<IPurchase>('Purchase', purchaseSchema);

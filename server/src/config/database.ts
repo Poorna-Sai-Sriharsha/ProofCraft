@@ -5,50 +5,56 @@ import { logger } from '../utils/logger.js';
 let isConnected = false;
 let memoryServer: any = null;
 
+const registerLifecycleListeners = () => {
+  if (mongoose.connection.listenerCount('disconnected') === 0) {
+    mongoose.connection.on('disconnected', () => {
+      if (isConnected) {
+        logger.warn('⚠️ MongoDB connection lost. Attempting auto-reconnect...');
+        isConnected = false;
+      }
+    });
+    mongoose.connection.on('reconnected', () => {
+      logger.info('🔄 MongoDB reconnected successfully.');
+      isConnected = true;
+    });
+    mongoose.connection.on('error', (err) => {
+      if (isConnected) {
+        logger.error(`❌ MongoDB runtime error: ${err.message}`);
+      }
+    });
+  }
+};
+
 export const connectDatabase = async (): Promise<typeof mongoose> => {
   if (isConnected && mongoose.connection.readyState === 1) {
     return mongoose;
   }
 
+  mongoose.set('strictQuery', true);
+
   try {
-    mongoose.set('strictQuery', true);
-
-    // Register connection resiliency lifecycle handlers (Deep Gap 4)
-    if (mongoose.connection.listenerCount('disconnected') === 0) {
-      mongoose.connection.on('disconnected', () => {
-        logger.warn('⚠️ MongoDB connection lost. Attempting auto-reconnect...');
-        isConnected = false;
-      });
-      mongoose.connection.on('reconnected', () => {
-        logger.info('🔄 MongoDB reconnected successfully.');
-        isConnected = true;
-      });
-      mongoose.connection.on('error', (err) => {
-        logger.error(`❌ MongoDB connection error: ${err.message}`);
-      });
-    }
-
     // Try connecting to the provided MONGODB_URI
     await mongoose.connect(env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 3000,
+      serverSelectionTimeoutMS: 2000,
     });
 
     isConnected = true;
+    registerLifecycleListeners();
     logger.info(`✅ Connected to MongoDB at: ${env.MONGODB_URI}`);
     return mongoose;
   } catch (error: any) {
-    logger.warn(`⚠️ Failed to connect to ${env.MONGODB_URI} (${error.message}).`);
-
     // In development or test, fallback to MongoMemoryServer so the app runs without external setup
     if (env.NODE_ENV !== 'production') {
       try {
-        logger.info('🚀 Launching in-memory MongoDB fallback for local development/testing...');
+        logger.info(`ℹ️ Local MongoDB service not detected (${error.message}).`);
+        logger.info('🚀 Launching built-in in-memory MongoDB fallback for seamless local development...');
         const { MongoMemoryServer } = await import('mongodb-memory-server');
         memoryServer = await MongoMemoryServer.create();
         const memoryUri = memoryServer.getUri();
 
         await mongoose.connect(memoryUri);
         isConnected = true;
+        registerLifecycleListeners();
         logger.info(`✅ Connected to In-Memory MongoDB at: ${memoryUri}`);
         return mongoose;
       } catch (memErr: any) {
@@ -57,6 +63,7 @@ export const connectDatabase = async (): Promise<typeof mongoose> => {
       }
     }
 
+    logger.error(`❌ Fatal: Failed to connect to MongoDB at ${env.MONGODB_URI} (${error.message})`);
     throw error;
   }
 };

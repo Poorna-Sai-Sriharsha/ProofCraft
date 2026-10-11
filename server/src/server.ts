@@ -2,7 +2,7 @@ import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import { logger } from './utils/logger.js';
-import { startReminderJob } from './jobs/reminderJob.js';
+import { startReminderJob, stopReminderJob } from './jobs/reminderJob.js';
 
 const startServer = async () => {
   try {
@@ -24,15 +24,40 @@ const startServer = async () => {
     // Graceful shutdown
     const gracefulShutdown = async (signal: string) => {
       logger.info(`Received ${signal}. Starting graceful shutdown...`);
+
+      // Force exit timeout if open sockets fail to drain in 10s
+      const forceExitTimer = setTimeout(() => {
+        logger.error('⚠️ Forcefully terminating server: socket draining timed out after 10s.');
+        process.exit(1);
+      }, 10000);
+      forceExitTimer.unref();
+
+      // Stop cron jobs
+      stopReminderJob();
+
       server.close(async () => {
         logger.info('HTTP server closed.');
-        await disconnectDatabase();
+        try {
+          await disconnectDatabase();
+        } catch (dbErr: any) {
+          logger.error(`Database disconnect error: ${dbErr.message}`);
+        }
+        clearTimeout(forceExitTimer);
         process.exit(0);
       });
     };
 
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+    process.on('unhandledRejection', (reason: any) => {
+      logger.error(`Unhandled Rejection at: ${reason?.stack || reason}`);
+    });
+
+    process.on('uncaughtException', (error: Error) => {
+      logger.error(`Uncaught Exception: ${error.stack || error.message}`);
+      gracefulShutdown('uncaughtException');
+    });
   } catch (error: any) {
     logger.error(`❌ Fatal server error on startup: ${error.message}`);
     process.exit(1);

@@ -58,3 +58,10 @@ export const deletePurchase = asyncHandler(async (req: Request, res: Response) =
     data: result,
   });
 });
+
+export const exportPurchases = asyncHandler(async (req: Request, res: Response) => {
+  const csv = await PurchaseService.exportPurchasesCsv(req.user!.id);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="proofcart_inventory.csv"');
+  res.status(200).send(csv);
+});

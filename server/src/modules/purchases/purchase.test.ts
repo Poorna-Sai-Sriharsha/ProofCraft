@@ -281,5 +281,37 @@ describe('Purchase APIs & IDOR Cross-User Authorization Tests', () => {
         .set('Authorization', `Bearer ${userAToken}`);
       expect(deleteRes.status).toBe(200);
     });
+
+    it('UX-09: should filter purchases by onlyArchived', async () => {
+      // Archive purchase
+      await request(app)
+        .patch(`/api/v1/purchases/${userAPurchaseId}/archive`)
+        .set('Authorization', `Bearer ${userAToken}`);
+
+      // Default query excludes archived
+      const activeRes = await request(app)
+        .get('/api/v1/purchases')
+        .set('Authorization', `Bearer ${userAToken}`);
+      expect(activeRes.body.data.length).toBe(0);
+
+      // onlyArchived=true returns archived items
+      const archivedRes = await request(app)
+        .get('/api/v1/purchases?onlyArchived=true')
+        .set('Authorization', `Bearer ${userAToken}`);
+      expect(archivedRes.body.data.length).toBe(1);
+      expect(archivedRes.body.data[0].id).toBe(userAPurchaseId);
+    });
+
+    it('SaaS-04: should export purchases to CSV with correct headers and data', async () => {
+      const res = await request(app)
+        .get('/api/v1/purchases/export')
+        .set('Authorization', `Bearer ${userAToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toContain('text/csv');
+      expect(res.headers['content-disposition']).toContain('proofcart_inventory.csv');
+      expect(res.text).toContain('ID,Product Name,Brand,Category');
+      expect(res.text).toContain('MacBook Pro M3 Max');
+    });
   });
 });

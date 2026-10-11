@@ -30,7 +30,9 @@ apiClient.interceptors.response.use(
     // If unauthorized, clear token and redirect safely (UX-05)
     if (error.response?.status === 401) {
       localStorage.removeItem('proofcart_token');
+      const isAuthCheck = error.config?.url?.includes('/auth/me');
       if (
+        !isAuthCheck &&
         typeof window !== 'undefined' &&
         window.location.pathname !== '/login' &&
         window.location.pathname !== '/register' &&

@@ -3,7 +3,9 @@ import { NotificationService } from './notification.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 
 export const listNotifications = asyncHandler(async (req: Request, res: Response) => {
-  const notifications = await NotificationService.listNotifications(req.user!.id);
+  const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+  const notifications = await NotificationService.listNotifications(req.user!.id, limit, page);
   res.status(200).json({
     success: true,
     data: notifications,

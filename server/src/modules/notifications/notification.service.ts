@@ -6,11 +6,16 @@ import { ApiError } from '../../utils/ApiError.js';
 import { logger } from '../../utils/logger.js';
 
 export class NotificationService {
-  static async listNotifications(userId: string) {
+  static async listNotifications(userId: string, limit = 50, page = 1) {
     const userObjectId = new mongoose.Types.ObjectId(userId);
+    const safeLimit = Math.min(Math.max(1, limit), 100);
+    const safeSkip = (Math.max(1, page) - 1) * safeLimit;
+
     return Notification.find({ userId: userObjectId })
       .populate('purchaseId', 'productName brand category')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(safeSkip)
+      .limit(safeLimit);
   }
 
   static async getUnreadCount(userId: string): Promise<number> {
@@ -69,15 +74,15 @@ export class NotificationService {
 
   /**
    * Idempotent reminder scheduler job.
-   * Checks 30-day, 7-day, and 1-day reminder windows for all active purchases.
-   * Employs unique compound index and catch-up ranges to prevent duplicates.
+   * Checks mutually exclusive 30-day, 7-day, and 1-day reminder windows (BG-02)
+   * to eliminate multi-tier alert storms when purchases are registered near deadlines.
    */
   static async generateUpcomingReminders(): Promise<number> {
     const now = new Date();
     const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
     const horizonLimit = new Date(startOfToday.getTime() + 32 * 24 * 60 * 60 * 1000);
 
-    // Scoped query: Only fetch purchases with upcoming deadlines in the 30-day window (DB-03)
+    // Scoped query with compound index (DB-04)
     const activePurchases = await Purchase.find({
       archivedAt: null,
       $or: [
@@ -88,27 +93,32 @@ export class NotificationService {
       .select('_id userId productName warrantyExpiryDate returnDeadline')
       .lean();
 
-    const intervals = [30, 7, 1];
+    const tiers = [
+      { interval: 30, min: 8, max: 30 },
+      { interval: 7, min: 2, max: 7 },
+      { interval: 1, min: 0, max: 1 },
+    ];
+
     let createdCount = 0;
 
     for (const p of activePurchases) {
       // 1. Warranty reminders
       if (p.warrantyExpiryDate) {
         const days = getDaysRemaining(p.warrantyExpiryDate, now);
-        for (const interval of intervals) {
-          if (days <= interval && days >= 0) {
+        for (const tier of tiers) {
+          if (days >= tier.min && days <= tier.max) {
             try {
-              await Notification.create({
+              const notif = await Notification.create({
                 userId: p.userId,
                 purchaseId: p._id,
                 type: 'WARRANTY_EXPIRY',
-                reminderDaysBefore: interval,
+                reminderDaysBefore: tier.interval,
                 title: `Warranty Expiring Soon: ${p.productName}`,
                 message: `The warranty for your ${p.productName} expires in ${days} day(s). Check your documentation or claim service if needed.`,
               });
               createdCount++;
+              logger.info(`[Email Dispatch Simulation] Sent WARRANTY_EXPIRY reminder to user ${p.userId} for purchase "${p.productName}" (${days} days remaining)`);
             } catch (err: any) {
-              // Ignore duplicate key error (11000) - guarantees idempotency
               if (err.code !== 11000) {
                 logger.error(`Error generating warranty reminder: ${err.message}`);
               }
@@ -120,18 +130,19 @@ export class NotificationService {
       // 2. Return deadline reminders
       if (p.returnDeadline) {
         const days = getDaysRemaining(p.returnDeadline, now);
-        for (const interval of intervals) {
-          if (days <= interval && days >= 0) {
+        for (const tier of tiers) {
+          if (days >= tier.min && days <= tier.max) {
             try {
-              await Notification.create({
+              const notif = await Notification.create({
                 userId: p.userId,
                 purchaseId: p._id,
                 type: 'RETURN_DEADLINE',
-                reminderDaysBefore: interval,
+                reminderDaysBefore: tier.interval,
                 title: `Return Window Closing: ${p.productName}`,
                 message: `The return deadline for your ${p.productName} is in ${days} day(s). Ensure you initiate a return if you plan to.`,
               });
               createdCount++;
+              logger.info(`[Email Dispatch Simulation] Sent RETURN_DEADLINE reminder to user ${p.userId} for purchase "${p.productName}" (${days} days remaining)`);
             } catch (err: any) {
               if (err.code !== 11000) {
                 logger.error(`Error generating return reminder: ${err.message}`);

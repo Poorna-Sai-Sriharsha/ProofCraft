@@ -34,9 +34,10 @@ export const downloadDocument = asyncHandler(async (req: Request, res: Response)
 
   res.setHeader('Content-Type', mimeType);
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
   res.setHeader(
     'Content-Disposition',
-    `inline; filename="${encodeURIComponent(originalFilename)}"`
+    `attachment; filename="${encodeURIComponent(originalFilename)}"`
   );
 
   stream.on('error', (err: any) => {

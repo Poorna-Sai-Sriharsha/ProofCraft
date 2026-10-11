@@ -27,7 +27,8 @@ export const getWarranties = asyncHandler(async (req: Request, res: Response) =>
 });
 
 export const getRecentPurchases = asyncHandler(async (req: Request, res: Response) => {
-  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 5;
+  const parsedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 5;
+  const limit = isNaN(parsedLimit) ? 5 : Math.min(Math.max(1, parsedLimit), 50);
   const purchases = await DashboardService.getRecentPurchases(req.user!.id, limit);
   res.status(200).json({
     success: true,
@@ -36,7 +37,8 @@ export const getRecentPurchases = asyncHandler(async (req: Request, res: Respons
 });
 
 export const getDeadlines = asyncHandler(async (req: Request, res: Response) => {
-  const days = req.query.days ? parseInt(req.query.days as string, 10) : 90;
+  const parsedDays = req.query.days ? parseInt(req.query.days as string, 10) : 90;
+  const days = isNaN(parsedDays) ? 90 : Math.min(Math.max(1, parsedDays), 365);
   const deadlines = await DashboardService.getUpcomingDeadlines(req.user!.id, days);
   res.status(200).json({
     success: true,

@@ -16,6 +16,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Download,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -35,6 +36,7 @@ export default function PurchasesPage() {
   const page = parseInt(searchParams.get('page') || '1', 10);
   const sortBy = searchParams.get('sortBy') || 'purchaseDate';
   const sortOrder = searchParams.get('sortOrder') || 'desc';
+  const isArchived = searchParams.get('archived') === 'true';
 
   const [searchInput, setSearchInput] = useState(search);
   const [deleteModalPurchase, setDeleteModalPurchase] = useState<Purchase | null>(null);
@@ -44,7 +46,7 @@ export default function PurchasesPage() {
     data: Purchase[];
     meta: { page: number; limit: number; total: number; totalPages: number };
   }>({
-    queryKey: ['purchases', { page, search, category, status, sortBy, sortOrder }],
+    queryKey: ['purchases', { page, search, category, status, sortBy, sortOrder, isArchived }],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set('page', page.toString());
@@ -52,6 +54,7 @@ export default function PurchasesPage() {
       if (search) params.set('search', search);
       if (category) params.set('category', category);
       if (status) params.set('status', status);
+      if (isArchived) params.set('onlyArchived', 'true');
       params.set('sortBy', sortBy);
       params.set('sortOrder', sortOrder);
 
@@ -66,12 +69,27 @@ export default function PurchasesPage() {
       return apiClient.patch(`/purchases/${id}/archive`);
     },
     onSuccess: () => {
-      toast.success('Purchase archived.');
+      toast.success('Purchase moved to archive.');
       queryClient.invalidateQueries({ queryKey: ['purchases'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
     onError: (err: any) => {
       toast.error(err.message || 'Failed to archive purchase.');
+    },
+  });
+
+  // Restore mutation
+  const restoreMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiClient.patch(`/purchases/${id}/restore`);
+    },
+    onSuccess: () => {
+      toast.success('Purchase restored to active list.');
+      queryClient.invalidateQueries({ queryKey: ['purchases'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'Failed to restore purchase.');
     },
   });
 
@@ -91,6 +109,28 @@ export default function PurchasesPage() {
       toast.error(err.message || 'Failed to delete purchase.');
     },
   });
+
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportCsv = async () => {
+    try {
+      setExporting(true);
+      const res = await apiClient.get('/purchases/export', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'proofcart_inventory.csv');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Inventory exported to CSV.');
+    } catch (e: any) {
+      toast.error('Failed to export inventory.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,13 +180,58 @@ export default function PurchasesPage() {
             Manage your registered products, warranties, and proof of purchase documents
           </p>
         </div>
-        <Link
-          to="/purchases/new"
-          className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl shadow-sm transition-colors flex-shrink-0"
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={handleExportCsv}
+            disabled={exporting}
+            className="inline-flex items-center justify-center space-x-2 px-3.5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-sm rounded-xl shadow-sm transition-colors flex-shrink-0"
+          >
+            <Download className="w-4 h-4 text-slate-500" />
+            <span>{exporting ? 'Exporting...' : 'Export CSV'}</span>
+          </button>
+          <Link
+            to="/purchases/new"
+            className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl shadow-sm transition-colors flex-shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add New Purchase</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* View Toggle Tabs (UX-09) */}
+      <div className="flex items-center space-x-2 border-b border-slate-200 pb-3">
+        <button
+          onClick={() => {
+            const next = new URLSearchParams(searchParams);
+            next.delete('archived');
+            next.set('page', '1');
+            setSearchParams(next);
+          }}
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+            !isArchived
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
         >
-          <Plus className="w-4 h-4" />
-          <span>Add New Purchase</span>
-        </Link>
+          Active Purchases
+        </button>
+        <button
+          onClick={() => {
+            const next = new URLSearchParams(searchParams);
+            next.set('archived', 'true');
+            next.set('page', '1');
+            setSearchParams(next);
+          }}
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5 ${
+            isArchived
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Archive className="w-3.5 h-3.5" />
+          <span>Archived Purchases</span>
+        </button>
       </div>
 
       {/* Search and Filters Bar */}
@@ -235,16 +320,40 @@ export default function PurchasesPage() {
         </div>
       ) : !data?.data || data.data.length === 0 ? (
         <EmptyState
-          icon={ShoppingBag}
-          title={hasActiveFilters ? 'No matching purchases found' : 'No purchases in your vault yet'}
+          icon={isArchived ? Archive : ShoppingBag}
+          title={
+            isArchived
+              ? 'No archived purchases'
+              : hasActiveFilters
+              ? 'No matching purchases found'
+              : 'No purchases in your vault yet'
+          }
           description={
-            hasActiveFilters
+            isArchived
+              ? 'Purchases you archive will be stored here safely. You can restore them back to your active inventory at any time.'
+              : hasActiveFilters
               ? 'Try modifying your search query or removing the filters.'
               : 'Add your first product to start tracking warranty expiry, return windows, and receipts.'
           }
-          actionText={hasActiveFilters ? 'Clear Filters' : 'Add First Purchase'}
-          actionHref={hasActiveFilters ? undefined : '/purchases/new'}
-          onAction={hasActiveFilters ? clearFilters : undefined}
+          actionText={
+            isArchived
+              ? 'View Active Purchases'
+              : hasActiveFilters
+              ? 'Clear Filters'
+              : 'Add First Purchase'
+          }
+          actionHref={isArchived || hasActiveFilters ? undefined : '/purchases/new'}
+          onAction={
+            isArchived
+              ? () => {
+                  const next = new URLSearchParams(searchParams);
+                  next.delete('archived');
+                  setSearchParams(next);
+                }
+              : hasActiveFilters
+              ? clearFilters
+              : undefined
+          }
         />
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -310,13 +419,23 @@ export default function PurchasesPage() {
                         >
                           <Edit2 className="w-4 h-4" />
                         </Link>
-                        <button
-                          onClick={() => archiveMutation.mutate(purchase._id)}
-                          title="Archive"
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                        >
-                          <Archive className="w-4 h-4" />
-                        </button>
+                        {purchase.archivedAt ? (
+                          <button
+                            onClick={() => restoreMutation.mutate(purchase._id)}
+                            title="Restore to Active"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => archiveMutation.mutate(purchase._id)}
+                            title="Archive"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                          >
+                            <Archive className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => setDeleteModalPurchase(purchase)}
                           title="Delete"

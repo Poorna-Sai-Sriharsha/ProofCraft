@@ -96,6 +96,21 @@ describe('Document Management & IDOR Security Tests', () => {
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
     });
+
+    it('SEC-06: should reject spoofed files where content signature does not match MIME type', async () => {
+      // Named .pdf and sent as application/pdf, but contains non-PDF bytes
+      const fakePdfBuffer = Buffer.from('NOT_A_REAL_PDF_HEADER_JUST_TEXT');
+
+      const res = await request(app)
+        .post(`/api/v1/purchases/${userAPurchaseId}/documents`)
+        .set('Authorization', `Bearer ${userAToken}`)
+        .field('documentType', 'INVOICE')
+        .attach('file', fakePdfBuffer, 'spoofed.pdf');
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('INVALID_FILE_SIGNATURE');
+    });
   });
 
   describe('Document Authorized Download & IDOR Protection', () => {

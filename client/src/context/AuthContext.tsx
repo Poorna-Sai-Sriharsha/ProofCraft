@@ -18,6 +18,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const fetchMe = async () => {
+      const token = localStorage.getItem('proofcart_token');
+      if (!token) {
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
       try {
         const res = await apiClient.get('/auth/me');
         if (res.data.success && res.data.data) {
@@ -25,6 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (err) {
         // Not logged in or expired session
+        localStorage.removeItem('proofcart_token');
         setUser(null);
       } finally {
         setIsLoading(false);

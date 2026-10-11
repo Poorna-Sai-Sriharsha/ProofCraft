@@ -113,15 +113,41 @@ export default function NotificationsPage() {
 
                 <div className="min-w-0">
                   <div className="flex items-center space-x-2">
-                    <h4 className="text-sm font-bold text-slate-900">{item.title}</h4>
+                    {(() => {
+                      const targetPurchaseId = typeof item.purchaseId === 'object' && item.purchaseId ? (item.purchaseId as any)._id : item.purchaseId;
+                      return targetPurchaseId ? (
+                        <Link
+                          to={`/purchases/${targetPurchaseId}`}
+                          className="text-sm font-bold text-slate-900 hover:text-indigo-600 transition-colors"
+                        >
+                          {item.title}
+                        </Link>
+                      ) : (
+                        <h4 className="text-sm font-bold text-slate-900">{item.title}</h4>
+                      );
+                    })()}
                     {!item.readAt && (
                       <span className="w-2 h-2 rounded-full bg-indigo-600 flex-shrink-0" />
                     )}
                   </div>
                   <p className="text-xs text-slate-600 mt-1 leading-relaxed">{item.message}</p>
-                  <span className="text-[11px] text-slate-400 block mt-2">
-                    {format(parseISO(item.createdAt), 'MMMM dd, yyyy • h:mm a')}
-                  </span>
+                  <div className="flex items-center space-x-4 mt-2">
+                    <span className="text-[11px] text-slate-400">
+                      {format(parseISO(item.createdAt), 'MMMM dd, yyyy • h:mm a')}
+                    </span>
+                    {(() => {
+                      const targetPurchaseId = typeof item.purchaseId === 'object' && item.purchaseId ? (item.purchaseId as any)._id : item.purchaseId;
+                      return targetPurchaseId ? (
+                        <Link
+                          to={`/purchases/${targetPurchaseId}`}
+                          className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 inline-flex items-center space-x-0.5"
+                        >
+                          <span>View Product</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </Link>
+                      ) : null;
+                    })()}
+                  </div>
                 </div>
               </div>
 

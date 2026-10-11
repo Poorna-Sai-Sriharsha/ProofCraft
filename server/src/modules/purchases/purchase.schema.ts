@@ -36,6 +36,7 @@ export const listPurchaseQuerySchema = z.object({
     .default('purchaseDate'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   includeArchived: z.coerce.boolean().default(false),
+  onlyArchived: z.coerce.boolean().default(false),
 });
 
 export type CreatePurchaseInput = z.infer<typeof createPurchaseSchema>;

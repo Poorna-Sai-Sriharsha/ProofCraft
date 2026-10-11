@@ -23,6 +23,7 @@ const editPurchaseSchema = z.object({
   returnWindowDays: z.coerce.number().min(0).optional(),
   returnDeadline: z.string().optional(),
   warrantyStatus: z.enum(['ACTIVE', 'EXPIRED', 'NONE', 'UNKNOWN']).default('ACTIVE'),
+  warrantyStartDate: z.string().optional(),
   warrantyDurationMonths: z.coerce.number().min(0).optional(),
   warrantyExpiryDate: z.string().optional(),
   warrantyProvider: z.string().max(150).trim().optional(),
@@ -70,6 +71,7 @@ export default function EditPurchasePage() {
         returnWindowDays: purchase.returnWindowDays || 0,
         returnDeadline: purchase.returnDeadline ? purchase.returnDeadline.split('T')[0] : '',
         warrantyStatus: purchase.warrantyStatus,
+        warrantyStartDate: purchase.warrantyStartDate ? purchase.warrantyStartDate.split('T')[0] : '',
         warrantyDurationMonths: purchase.warrantyDurationMonths || 0,
         warrantyExpiryDate: purchase.warrantyExpiryDate ? purchase.warrantyExpiryDate.split('T')[0] : '',
         warrantyProvider: purchase.warrantyProvider || '',
@@ -198,10 +200,38 @@ export default function EditPurchasePage() {
             </div>
 
             <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Warranty Start Date</label>
+              <input
+                type="date"
+                {...register('warrantyStartDate')}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm"
+              />
+            </div>
+
+            <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Warranty Duration (Months)</label>
               <input
                 type="number"
                 {...register('warrantyDurationMonths')}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Warranty Expiry Date</label>
+              <input
+                type="date"
+                {...register('warrantyExpiryDate')}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Warranty Provider</label>
+              <input
+                type="text"
+                placeholder="e.g. AppleCare, Retailer"
+                {...register('warrantyProvider')}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm"
               />
             </div>

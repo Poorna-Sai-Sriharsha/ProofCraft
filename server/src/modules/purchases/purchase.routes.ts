@@ -7,6 +7,7 @@ import {
   archivePurchase,
   restorePurchase,
   deletePurchase,
+  exportPurchases,
 } from './purchase.controller.js';
 import { authenticate } from '../../middleware/authenticate.js';
 import { validate } from '../../middleware/validate.js';
@@ -29,6 +30,7 @@ router.use('/:id/services', purchaseServiceRoutes);
 
 router.post('/', validate({ body: createPurchaseSchema }), createPurchase);
 router.get('/', validate({ query: listPurchaseQuerySchema }), getPurchases);
+router.get('/export', exportPurchases);
 router.get('/:id', getPurchaseById);
 router.patch('/:id', validate({ body: updatePurchaseSchema }), updatePurchase);
 router.patch('/:id/archive', archivePurchase);

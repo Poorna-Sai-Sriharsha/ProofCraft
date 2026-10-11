@@ -65,7 +65,9 @@ export class PurchaseService {
       userId: new mongoose.Types.ObjectId(userId),
     };
 
-    if (!query.includeArchived) {
+    if (query.onlyArchived) {
+      filter.archivedAt = { $ne: null };
+    } else if (!query.includeArchived) {
       filter.archivedAt = null;
     }
 
@@ -247,4 +249,58 @@ export class PurchaseService {
 
     return { message: 'Purchase and associated history deleted successfully.' };
   }
+
+  static async exportPurchasesCsv(userId: string): Promise<string> {
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+    const purchases = await Purchase.find({ userId: userObjectId }).sort({ purchaseDate: -1 });
+
+    const headers = [
+      'ID',
+      'Product Name',
+      'Brand',
+      'Category',
+      'Model Number',
+      'Serial Number',
+      'Purchase Price',
+      'Currency',
+      'Purchase Date',
+      'Retailer',
+      'Order ID',
+      'Warranty Status',
+      'Warranty Start Date',
+      'Warranty Expiry Date',
+      'Warranty Provider',
+      'Return Deadline',
+      'Archived',
+    ];
+
+    const escapeCsv = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      const s = String(val).replace(/"/g, '""');
+      return `"${s}"`;
+    };
+
+    const rows = purchases.map((p) => [
+      escapeCsv(p._id),
+      escapeCsv(p.productName),
+      escapeCsv(p.brand || ''),
+      escapeCsv(p.category),
+      escapeCsv(p.modelNumber || ''),
+      escapeCsv(p.serialNumber || ''),
+      escapeCsv(p.purchasePrice),
+      escapeCsv(p.currency),
+      escapeCsv(p.purchaseDate ? p.purchaseDate.toISOString().split('T')[0] : ''),
+      escapeCsv(p.retailer || ''),
+      escapeCsv(p.orderId || ''),
+      escapeCsv(p.warrantyStatus),
+      escapeCsv(p.warrantyStartDate ? p.warrantyStartDate.toISOString().split('T')[0] : ''),
+      escapeCsv(p.warrantyExpiryDate ? p.warrantyExpiryDate.toISOString().split('T')[0] : ''),
+      escapeCsv(p.warrantyProvider || ''),
+      escapeCsv(p.returnDeadline ? p.returnDeadline.toISOString().split('T')[0] : ''),
+      escapeCsv(p.archivedAt ? 'Yes' : 'No'),
+    ]);
+
+    return [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+  }
 }
+

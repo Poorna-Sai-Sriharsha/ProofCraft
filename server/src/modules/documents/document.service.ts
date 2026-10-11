@@ -16,6 +16,13 @@ export class DocumentService {
       throw ApiError.badRequest('No file provided for upload', 'NO_FILE_PROVIDED');
     }
 
+    if (!DocumentService.isValidFileSignature(file.buffer, file.mimetype)) {
+      throw ApiError.badRequest(
+        `File content signature does not match declared type '${file.mimetype}'.`,
+        'INVALID_FILE_SIGNATURE'
+      );
+    }
+
     if (!mongoose.Types.ObjectId.isValid(purchaseId)) {
       throw ApiError.badRequest('Invalid purchase identifier', 'INVALID_PURCHASE_ID');
     }
@@ -134,5 +141,39 @@ export class DocumentService {
     await PurchaseDocument.deleteOne({ _id: document._id });
 
     return { message: 'Document removed successfully.' };
+  }
+
+  static isValidFileSignature(buffer: Buffer, mimeType: string): boolean {
+    if (!buffer || buffer.length < 4) return false;
+
+    switch (mimeType) {
+      case 'application/pdf':
+        // PDF begins with '%PDF' (0x25, 0x50, 0x44, 0x46)
+        return buffer.subarray(0, 4).toString('ascii') === '%PDF';
+
+      case 'image/jpeg':
+        // JPEG starts with 0xFF 0xD8 0xFF
+        return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+
+      case 'image/png':
+        // PNG starts with 0x89 0x50 0x4E 0x47 (89 50 4E 47 0D 0A 1A 0A)
+        return (
+          buffer[0] === 0x89 &&
+          buffer[1] === 0x50 &&
+          buffer[2] === 0x4e &&
+          buffer[3] === 0x47
+        );
+
+      case 'image/webp':
+        // WEBP starts with 'RIFF' and bytes 8-11 are 'WEBP'
+        if (buffer.length < 12) return false;
+        return (
+          buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+          buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+        );
+
+      default:
+        return false;
+    }
   }
 }

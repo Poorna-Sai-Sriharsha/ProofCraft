@@ -69,6 +69,10 @@ notificationSchema.index(
   { unique: true }
 );
 
+// User query optimization indexes (DB-05)
+notificationSchema.index({ userId: 1, createdAt: -1 });
+notificationSchema.index({ userId: 1, readAt: 1 });
+
 export const Notification: Model<INotification> = mongoose.model<INotification>(
   'Notification',
   notificationSchema
