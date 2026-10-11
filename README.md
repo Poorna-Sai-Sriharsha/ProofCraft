@@ -7,6 +7,16 @@
 
 ---
 
+### 📸 Application Preview & Interface Showcase
+
+#### 🏷️ ProofCraft Overview & Asset Catalog
+![Overview Preview](ProofCraft.png)
+
+#### 📊 Live Analytics Dashboard & Warranty Health
+![Dashboard Preview](ProofCraft1.png)
+
+---
+
 ## 🌟 Executive Summary
 
 **ProofCart** is a production-grade, meticulously engineered personal asset, purchase, and warranty management platform. Built using the full **MERN stack** (MongoDB, Express.js, React, Node.js) with strict end-to-end TypeScript, it solves the universal frustrations experienced by modern consumers: lost tax receipts, missed retailer return windows, and forgotten manufacturer warranty expiration dates.
