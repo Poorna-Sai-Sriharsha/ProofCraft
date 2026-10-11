@@ -1,7 +1,7 @@
 # 🛡️ ProofCart — Personal Purchase & Warranty Vault
 
 > **Tagline:** Every purchase. Every warranty. One secure place.  
-> **Candidate:** Sriharsha Perin  
+> **Candidate:** Poorna Sai Sriharsha Perina 
 > **Assessment:** Software Engineer Intern – MERN Stack | StartupMeu Evaluation  
 > **Development Environment:** Visual Studio Code with Code0 AI Assistance & Code0 Integrated Terminal  
 
