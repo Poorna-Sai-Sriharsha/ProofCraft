@@ -10,10 +10,10 @@
 ### 📸 Application Preview & Interface Showcase
 
 #### 🏷️ ProofCraft Overview & Asset Catalog
-![Overview Preview](ProofCraft.png)
+![Overview Preview](docs/ProofCraft.png)
 
 #### 📊 Live Analytics Dashboard & Warranty Health
-![Dashboard Preview](ProofCraft1.png)
+![Dashboard Preview](docs/ProofCraft1.png)
 
 ---
 
