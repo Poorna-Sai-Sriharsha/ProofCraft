@@ -17,6 +17,9 @@ apiClient.interceptors.request.use((config) => {
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  if (config.headers) {
+    config.headers['X-Requested-With'] = 'XMLHttpRequest';
+  }
   return config;
 });
 
@@ -24,9 +27,17 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<any>) => {
-    // If unauthorized, clear token
+    // If unauthorized, clear token and redirect safely (UX-05)
     if (error.response?.status === 401) {
       localStorage.removeItem('proofcart_token');
+      if (
+        typeof window !== 'undefined' &&
+        window.location.pathname !== '/login' &&
+        window.location.pathname !== '/register' &&
+        window.location.pathname !== '/'
+      ) {
+        window.location.href = '/login?expired=true';
+      }
     }
 
     const message =

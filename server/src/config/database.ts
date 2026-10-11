@@ -13,6 +13,21 @@ export const connectDatabase = async (): Promise<typeof mongoose> => {
   try {
     mongoose.set('strictQuery', true);
 
+    // Register connection resiliency lifecycle handlers (Deep Gap 4)
+    if (mongoose.connection.listenerCount('disconnected') === 0) {
+      mongoose.connection.on('disconnected', () => {
+        logger.warn('⚠️ MongoDB connection lost. Attempting auto-reconnect...');
+        isConnected = false;
+      });
+      mongoose.connection.on('reconnected', () => {
+        logger.info('🔄 MongoDB reconnected successfully.');
+        isConnected = true;
+      });
+      mongoose.connection.on('error', (err) => {
+        logger.error(`❌ MongoDB connection error: ${err.message}`);
+      });
+    }
+
     // Try connecting to the provided MONGODB_URI
     await mongoose.connect(env.MONGODB_URI, {
       serverSelectionTimeoutMS: 3000,

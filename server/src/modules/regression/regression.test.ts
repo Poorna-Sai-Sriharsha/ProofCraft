@@ -357,4 +357,214 @@ describe('Level 4–10 Master Regression Test Suite (QA Release Candidate)', () 
       expect(statusYesterday).toBe('EXPIRED');
     });
   });
+
+  // =========================================================================
+  // 6. SECURITY DEFENSE & TOKEN REVOCATION (SEC-01, SEC-02, SEC-03)
+  // =========================================================================
+  describe('REG-006: Security & Token Invalidation Safeguards', () => {
+    it('SEC-01: revokes previous JWT session immediately upon password change', async () => {
+      // 1. User A changes password
+      const changeRes = await request(app)
+        .patch('/api/v1/auth/password')
+        .set('Authorization', `Bearer ${userAToken}`)
+        .send({
+          currentPassword: 'StrongPassword123!',
+          newPassword: 'BrandNewSecurePassword456!',
+        });
+      expect(changeRes.status).toBe(200);
+      const newSessionToken = changeRes.body.data.token;
+      expect(newSessionToken).toBeDefined();
+
+      // 2. Old userAToken MUST be revoked and return 401
+      const oldTokenRes = await request(app)
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${userAToken}`);
+      expect(oldTokenRes.status).toBe(401);
+      expect(oldTokenRes.body.error.code).toBe('SESSION_REVOKED');
+
+      // 3. New token succeeds
+      const newTokenRes = await request(app)
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${newSessionToken}`);
+      expect(newTokenRes.status).toBe(200);
+      expect(newTokenRes.body.data.email).toBe('qa.user.a@example.com');
+    });
+
+    it('SEC-02: enforces CSRF protection against untrusted cookie mutations lacking custom header', async () => {
+      // 1. Mutating cookie request without X-Requested-With header fails with 403 CSRF_DETECTED
+      const forgedRes = await request(app)
+        .post('/api/v1/purchases')
+        .set('Cookie', [`proofcart_session=${userAToken}`])
+        .send({
+          productName: 'Forged Purchase',
+          category: 'ELECTRONICS',
+          purchaseDate: '2026-02-01',
+          purchasePrice: 5000,
+          currency: 'INR',
+        });
+      expect(forgedRes.status).toBe(403);
+      expect(forgedRes.body.error.code).toBe('CSRF_DETECTED');
+
+      // 2. Legitimate request with X-Requested-With header is accepted
+      const legitRes = await request(app)
+        .post('/api/v1/purchases')
+        .set('Cookie', [`proofcart_session=${userAToken}`])
+        .set('X-Requested-With', 'XMLHttpRequest')
+        .send({
+          productName: 'Legitimate Purchase via Custom Header',
+          category: 'ELECTRONICS',
+          purchaseDate: '2026-02-01',
+          purchasePrice: 5000,
+          currency: 'INR',
+        });
+      expect(legitRes.status).toBe(201);
+    });
+
+    it('SEC-03: sanitizes regex characters in search and handles special tokens gracefully', async () => {
+      // Create a test purchase
+      await request(app)
+        .post('/api/v1/purchases')
+        .set('Authorization', `Bearer ${userAToken}`)
+        .send({
+          productName: 'Apple iPhone 15 Pro (Titanium)',
+          brand: 'Apple',
+          category: 'ELECTRONICS',
+          purchaseDate: '2026-01-10',
+          purchasePrice: 130000,
+          currency: 'INR',
+        });
+
+      // Search with unescaped regex metacharacters: (, [, *, +, ?, ^
+      const specialCharRes = await request(app)
+        .get('/api/v1/purchases?search=(Titanium)')
+        .set('Authorization', `Bearer ${userAToken}`);
+      expect(specialCharRes.status).toBe(200);
+      expect(specialCharRes.body.data.length).toBe(1);
+      expect(specialCharRes.body.data[0].productName).toContain('(Titanium)');
+
+      // Search with broken regex bracket syntax must NOT throw 500
+      const syntaxRes = await request(app)
+        .get('/api/v1/purchases?search=[unclosed-bracket')
+        .set('Authorization', `Bearer ${userAToken}`);
+      expect(syntaxRes.status).toBe(200);
+      expect(syntaxRes.body.data.length).toBe(0);
+    });
+  });
+
+  // =========================================================================
+  // 7. GDPR RIGHT TO ERASURE & CASCADING DELETION (DB-01)
+  // =========================================================================
+  describe('REG-007: GDPR Complete Account Erasure & Cascading Cleanup', () => {
+    it('DB-01: purges all purchases, documents, services, and notifications on account deletion', async () => {
+      // 1. Setup full user footprint: Purchase + Document + Service + Notification
+      const purchaseRes = await request(app)
+        .post('/api/v1/purchases')
+        .set('Authorization', `Bearer ${userBToken}`)
+        .send({
+          productName: 'Footprint Product',
+          category: 'HOME',
+          purchaseDate: '2026-03-01',
+          purchasePrice: 2500,
+          currency: 'INR',
+        });
+      const purchaseId = purchaseRes.body.data.id;
+
+      await request(app)
+        .post(`/api/v1/purchases/${purchaseId}/services`)
+        .set('Authorization', `Bearer ${userBToken}`)
+        .send({
+          serviceDate: '2026-04-01',
+          serviceProvider: 'Local Repair Shop',
+          issueDescription: 'General checkup',
+          repairCost: 500,
+        });
+
+      await Notification.create({
+        userId: userBId,
+        purchaseId,
+        type: 'WARRANTY_EXPIRY',
+        title: 'Expiring soon',
+        message: 'Your product warranty expires soon.',
+        reminderDaysBefore: 7,
+        scheduledFor: new Date(),
+      });
+
+      // Verify existence before deletion
+      expect(await Purchase.countDocuments({ userId: userBId })).toBe(1);
+      expect(await ServiceRecord.countDocuments({ userId: userBId })).toBe(1);
+      expect(await Notification.countDocuments({ userId: userBId })).toBe(1);
+
+      // 2. Delete User B Account
+      const deleteRes = await request(app)
+        .delete('/api/v1/auth/account')
+        .set('Authorization', `Bearer ${userBToken}`);
+      expect(deleteRes.status).toBe(200);
+
+      // 3. Verify zero orphan records remain in any collection
+      expect(await User.findById(userBId)).toBeNull();
+      expect(await Purchase.countDocuments({ userId: userBId })).toBe(0);
+      expect(await PurchaseDocument.countDocuments({ userId: userBId })).toBe(0);
+      expect(await ServiceRecord.countDocuments({ userId: userBId })).toBe(0);
+      expect(await Notification.countDocuments({ userId: userBId })).toBe(0);
+    });
+  });
+
+  // =========================================================================
+  // 8. PASSWORD RESET & RECOVERY WORKFLOW (UX-01)
+  // =========================================================================
+  describe('REG-008: Password Reset Recovery Flow', () => {
+    it('UX-01: requests 6-digit reset code and resets password successfully', async () => {
+      // 1. Request reset code for User A
+      const reqRes = await request(app)
+        .post('/api/v1/auth/forgot-password')
+        .send({ email: 'qa.user.a@example.com' });
+      expect(reqRes.status).toBe(200);
+      expect(reqRes.body.data.message).toContain('reset code');
+
+      // Retrieve reset code from DB or response
+      const userDoc = await User.findOne({ email: 'qa.user.a@example.com' }).select('+resetPasswordCode');
+      expect(userDoc).not.toBeNull();
+      expect(userDoc!.resetPasswordCode).toHaveLength(6);
+      const code = userDoc!.resetPasswordCode!;
+
+      // 2. Submit password reset with invalid code fails
+      const badCodeRes = await request(app)
+        .post('/api/v1/auth/reset-password')
+        .send({
+          email: 'qa.user.a@example.com',
+          resetCode: '000000',
+          newPassword: 'BrandNewPassword789!',
+        });
+      expect(badCodeRes.status).toBe(400);
+
+      // 3. Submit password reset with correct code succeeds
+      const successResetRes = await request(app)
+        .post('/api/v1/auth/reset-password')
+        .send({
+          email: 'qa.user.a@example.com',
+          resetCode: code,
+          newPassword: 'BrandNewPassword789!',
+        });
+      expect(successResetRes.status).toBe(200);
+
+      // 4. Old password fails
+      const oldLoginRes = await request(app)
+        .post('/api/v1/auth/login')
+        .send({
+          email: 'qa.user.a@example.com',
+          password: 'StrongPassword123!',
+        });
+      expect(oldLoginRes.status).toBe(401);
+
+      // 5. New password succeeds
+      const newLoginRes = await request(app)
+        .post('/api/v1/auth/login')
+        .send({
+          email: 'qa.user.a@example.com',
+          password: 'BrandNewPassword789!',
+        });
+      expect(newLoginRes.status).toBe(200);
+      expect(newLoginRes.body.data.token).toBeDefined();
+    });
+  });
 });

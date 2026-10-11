@@ -257,7 +257,7 @@ export default function DashboardPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={spending} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
                   <XAxis dataKey="category" tick={{ fontSize: 12, fill: '#64748b' }} interval={0} />
-                  <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(val) => `₹${val}`} />
+                  <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(val) => Number(val).toLocaleString()} />
                   <Tooltip
                     formatter={(value: any, _name: any, item: any) => [
                       formatPrice(Number(value), item.payload.currency),

@@ -37,12 +37,35 @@ export default function PurchaseDetailsPage() {
 
   // Service record modal state
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [serviceDate, setServiceDate] = useState(new Date().toISOString().split('T')[0]);
   const [serviceProvider, setServiceProvider] = useState('');
   const [issueDescription, setIssueDescription] = useState('');
   const [repairDescription, setRepairDescription] = useState('');
   const [repairCost, setRepairCost] = useState('0');
   const [warrantyClaimStatus, setWarrantyClaimStatus] = useState('NOT_APPLICABLE');
+
+  const openCreateServiceModal = () => {
+    setEditingServiceId(null);
+    setServiceDate(new Date().toISOString().split('T')[0]);
+    setServiceProvider('');
+    setIssueDescription('');
+    setRepairDescription('');
+    setRepairCost('0');
+    setWarrantyClaimStatus('NOT_APPLICABLE');
+    setServiceModalOpen(true);
+  };
+
+  const openEditServiceModal = (sr: ServiceRecord) => {
+    setEditingServiceId(sr._id);
+    setServiceDate(sr.serviceDate ? new Date(sr.serviceDate).toISOString().split('T')[0] : '');
+    setServiceProvider(sr.serviceProvider);
+    setIssueDescription(sr.issueDescription);
+    setRepairDescription(sr.repairDescription || '');
+    setRepairCost(String(sr.repairCost || 0));
+    setWarrantyClaimStatus(sr.warrantyClaimStatus || 'NOT_APPLICABLE');
+    setServiceModalOpen(true);
+  };
 
   // 1. Fetch Purchase Details
   const {
@@ -113,21 +136,26 @@ export default function PurchaseDetailsPage() {
     },
   });
 
-  // Create Service Record Mutation
-  const createServiceMutation = useMutation({
+  // Save (Create or Edit) Service Record Mutation
+  const saveServiceMutation = useMutation({
     mutationFn: async () => {
-      return apiClient.post(`/purchases/${id}/services`, {
+      const payload = {
         serviceDate,
         serviceProvider,
         issueDescription,
         repairDescription,
         repairCost: Number(repairCost) || 0,
         warrantyClaimStatus,
-      });
+      };
+      if (editingServiceId) {
+        return apiClient.patch(`/services/${editingServiceId}`, payload);
+      }
+      return apiClient.post(`/purchases/${id}/services`, payload);
     },
     onSuccess: () => {
-      toast.success('Service log entry added.');
+      toast.success(editingServiceId ? 'Service log entry updated.' : 'Service log entry added.');
       setServiceModalOpen(false);
+      setEditingServiceId(null);
       setServiceProvider('');
       setIssueDescription('');
       setRepairDescription('');
@@ -135,7 +163,21 @@ export default function PurchaseDetailsPage() {
       queryClient.invalidateQueries({ queryKey: ['purchase-services', id] });
     },
     onError: (err: any) => {
-      toast.error(err.message || 'Failed to add service record.');
+      toast.error(err.message || 'Failed to save service record.');
+    },
+  });
+
+  // Delete Service Record Mutation
+  const deleteServiceMutation = useMutation({
+    mutationFn: async (serviceId: string) => {
+      return apiClient.delete(`/services/${serviceId}`);
+    },
+    onSuccess: () => {
+      toast.success('Service record deleted.');
+      queryClient.invalidateQueries({ queryKey: ['purchase-services', id] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || 'Failed to delete service record.');
     },
   });
 
@@ -152,6 +194,7 @@ export default function PurchaseDetailsPage() {
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.URL.revokeObjectURL(url);
     } catch (e: any) {
       toast.error('Could not download document.');
     }
@@ -408,7 +451,7 @@ export default function PurchaseDetailsPage() {
                 <p className="text-xs text-slate-400">Maintenance logs & warranty claims</p>
               </div>
               <button
-                onClick={() => setServiceModalOpen(true)}
+                onClick={openCreateServiceModal}
                 className="px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors flex items-center space-x-1"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -421,7 +464,7 @@ export default function PurchaseDetailsPage() {
                 <Wrench className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                 <p>No service records logged for this product.</p>
                 <button
-                  onClick={() => setServiceModalOpen(true)}
+                  onClick={openCreateServiceModal}
                   className="text-xs font-semibold text-indigo-600 hover:underline mt-1 inline-block"
                 >
                   Log maintenance or warranty claim
@@ -436,7 +479,27 @@ export default function PurchaseDetailsPage() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-900">{sr.serviceProvider}</span>
-                      <ClaimBadge status={sr.warrantyClaimStatus} />
+                      <div className="flex items-center space-x-2">
+                        <ClaimBadge status={sr.warrantyClaimStatus} />
+                        <button
+                          onClick={() => openEditServiceModal(sr)}
+                          className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors"
+                          title="Edit Service Record"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Delete this service log entry?')) {
+                              deleteServiceMutation.mutate(sr._id);
+                            }
+                          }}
+                          className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-white transition-colors"
+                          title="Delete Service Record"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                     <p className="text-slate-600">{sr.issueDescription}</p>
                     {sr.repairDescription && (
@@ -509,11 +572,11 @@ export default function PurchaseDetailsPage() {
         </div>
       </Modal>
 
-      {/* Log Service Modal */}
+      {/* Log / Edit Service Modal */}
       <Modal
         isOpen={serviceModalOpen}
         onClose={() => setServiceModalOpen(false)}
-        title="Log Service or Repair Record"
+        title={editingServiceId ? 'Edit Service or Repair Record' : 'Log Service or Repair Record'}
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -593,11 +656,11 @@ export default function PurchaseDetailsPage() {
               Cancel
             </button>
             <button
-              onClick={() => createServiceMutation.mutate()}
-              disabled={!serviceProvider || !issueDescription || createServiceMutation.isPending}
+              onClick={() => saveServiceMutation.mutate()}
+              disabled={!serviceProvider || !issueDescription || saveServiceMutation.isPending}
               className="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl"
             >
-              {createServiceMutation.isPending ? 'Saving...' : 'Save Log Entry'}
+              {saveServiceMutation.isPending ? 'Saving...' : editingServiceId ? 'Update Record' : 'Save Log Entry'}
             </button>
           </div>
         </div>

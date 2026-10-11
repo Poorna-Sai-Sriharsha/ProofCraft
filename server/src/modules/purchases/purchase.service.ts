@@ -14,6 +14,10 @@ import { ServiceRecord } from '../services/service.model.js';
 import { Notification } from '../notifications/notification.model.js';
 import { getStorageProvider } from '../documents/storage/index.js';
 
+const escapeRegex = (str: string): string => {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
 export class PurchaseService {
   static async createPurchase(userId: string, input: CreatePurchaseInput) {
     const purchaseDate = normalizeDateOnlyToUtc(input.purchaseDate);
@@ -74,7 +78,8 @@ export class PurchaseService {
     }
 
     if (query.search) {
-      const searchRegex = new RegExp(query.search, 'i');
+      const sanitized = escapeRegex(query.search.trim());
+      const searchRegex = new RegExp(sanitized, 'i');
       filter.$or = [
         { productName: searchRegex },
         { brand: searchRegex },

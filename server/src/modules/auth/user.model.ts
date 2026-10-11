@@ -5,6 +5,9 @@ export interface IUser extends Document {
   name: string;
   email: string;
   passwordHash: string;
+  tokenVersion: number;
+  resetPasswordCode?: string | null;
+  resetPasswordExpires?: Date | null;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -33,6 +36,20 @@ const userSchema = new Schema<IUser>(
       required: [true, 'Password hash is required'],
       select: false, // Never return passwordHash by default
     },
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
+    resetPasswordCode: {
+      type: String,
+      select: false,
+      default: null,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      select: false,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -42,6 +59,8 @@ const userSchema = new Schema<IUser>(
         delete (ret as any)._id;
         delete (ret as any).__v;
         delete (ret as any).passwordHash;
+        delete (ret as any).resetPasswordCode;
+        delete (ret as any).resetPasswordExpires;
         return ret;
       },
     },

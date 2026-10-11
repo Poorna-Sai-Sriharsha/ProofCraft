@@ -73,8 +73,21 @@ export class NotificationService {
    * Employs unique compound index and catch-up ranges to prevent duplicates.
    */
   static async generateUpcomingReminders(): Promise<number> {
-    const activePurchases = await Purchase.find({ archivedAt: null });
     const now = new Date();
+    const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+    const horizonLimit = new Date(startOfToday.getTime() + 32 * 24 * 60 * 60 * 1000);
+
+    // Scoped query: Only fetch purchases with upcoming deadlines in the 30-day window (DB-03)
+    const activePurchases = await Purchase.find({
+      archivedAt: null,
+      $or: [
+        { warrantyExpiryDate: { $gte: startOfToday, $lte: horizonLimit } },
+        { returnDeadline: { $gte: startOfToday, $lte: horizonLimit } },
+      ],
+    })
+      .select('_id userId productName warrantyExpiryDate returnDeadline')
+      .lean();
+
     const intervals = [30, 7, 1];
     let createdCount = 0;
 

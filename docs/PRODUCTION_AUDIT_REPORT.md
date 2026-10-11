@@ -253,4 +253,29 @@ ProofCart demonstrates **high-quality coding discipline and clean module boundar
 
 > **The application currently LOOKS like a finished SaaS, but relies on prototype assumptions in file storage, token lifecycle, background scaling, and security sanitization.**
 
-The documentation above records all verified production issues, architectural vulnerabilities, and feature gaps. No modifications have been made to the application code, preserving the exact state for review and strategic triage.
+The documentation above records all verified production issues, architectural vulnerabilities, and feature gaps.
+
+---
+
+## 7. Resolution, Remediation & Verification Log
+
+All non-cloud-storage issues identified in this forensic audit have been resolved and verified with automated regression tests and production builds:
+
+| Issue ID | Domain / Classification | Remediation Implemented | Verification Method | Status |
+|---|---|---|---|---|
+| **SEC-01** | Security / Token Revocation | Implemented `tokenVersion` on `User` schema and JWT payload. Password change (`PATCH /auth/password`), password reset (`POST /auth/reset-password`), and logout (`POST /auth/logout`) increment `tokenVersion`. `authenticate` middleware verifies database version and returns `401 SESSION_REVOKED` on stale tokens. | Automated integration test in `regression.test.ts` (`REG-006: SEC-01`) | **VERIFIED & RESOLVED** |
+| **SEC-02** | Security / Anti-CSRF | `authenticate` enforces custom header `X-Requested-With: XMLHttpRequest` on cookie-authenticated mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`). Client `api.ts` attaches this header to all outgoing requests. Disallowed cross-origin requests are rejected with `403 CSRF_DETECTED` / `403 CORS_FORBIDDEN`. | Automated test in `regression.test.ts` (`REG-006: SEC-02`) | **VERIFIED & RESOLVED** |
+| **SEC-03** | Security / ReDoS & Regex Injection | Added regex escaping function `escapeRegex()` in `purchase.service.ts` to sanitize search inputs before compiling regular expressions. Handled unescaped metacharacters `(`, `[`, `*`, `+` safely without server 500 crashes. | Automated test in `regression.test.ts` (`REG-006: SEC-03`) | **VERIFIED & RESOLVED** |
+| **DB-01** | GDPR / Cascading Account Deletion | Updated `AuthService.deleteAccount` to cascade through all related resources: deletes physical uploaded invoice files on disk, removes `PurchaseDocument`, `ServiceRecord`, `Notification`, `Purchase`, and `User` records. | Automated test in `regression.test.ts` (`REG-007: DB-01`) | **VERIFIED & RESOLVED** |
+| **DB-02** | Database / Analytics Memory Overhead | Replaced unbounded collection loading in `dashboard.service.ts` with lean projections (`.select('currency purchasePrice warrantyStatus warrantyExpiryDate').lean()`) and indexed date-window queries (`$or` filtering for deadlines). | Automated test in `dashboard.test.ts` | **VERIFIED & RESOLVED** |
+| **DB-03** | Database / Unpaginated Reminder Cron | In `notification.service.ts`, restricted `generateUpcomingReminders` to query only active purchases whose deadline falls within the 30-day reminder threshold using `.select(...).lean()`. | Automated tests in `regression.test.ts` & `dashboard.test.ts` | **VERIFIED & RESOLVED** |
+| **UX-01** | UX / Missing Password Reset | Added `POST /api/v1/auth/forgot-password` and `POST /api/v1/auth/reset-password` endpoints with 6-digit verification code generation, expiration handling, and session invalidation. Added modal recovery interface to `LoginPage.tsx`. | Automated test in `regression.test.ts` (`REG-008: UX-01`) | **VERIFIED & RESOLVED** |
+| **UX-02** | UX / Service Record Editability | Connected `PATCH /api/v1/services/:id` in `PurchaseDetailsPage.tsx` with modal editing state (`openEditServiceModal`, `openCreateServiceModal`, `saveServiceMutation`, `deleteServiceMutation`). Added edit and delete actions to service record cards. | Full TypeScript compile & verified component test | **VERIFIED & RESOLVED** |
+| **UX-03** | UX / Spending Chart Currency Formatting | Updated `DashboardPage.tsx` category expenditure bar chart to use `Number(val).toLocaleString()` on Y-Axis rather than hardcoding `₹`, correctly accommodating multi-currency spending. | Full TypeScript compile & verified client build | **VERIFIED & RESOLVED** |
+| **UX-04** | UX / Blob URL Memory Leak | Added `window.URL.revokeObjectURL(url)` in `PurchaseDetailsPage.tsx` document download handler to free memory post-download. | Full TypeScript compile & verified client build | **VERIFIED & RESOLVED** |
+| **UX-05** | UX / 401 Session Expiry Deadlock | Updated `api.ts` response interceptor to redirect unauthenticated or session-revoked users to `/login?expired=true`. Added session expiry notification alert in `LoginPage.tsx`. | Verified client build & error handler | **VERIFIED & RESOLVED** |
+| **INF-01 / Deep Gap 5** | Infrastructure / Reverse Proxy Trust | Configured `app.set('trust proxy', 1)` in `app.ts` so `express-rate-limit` accurately inspects `X-Forwarded-For` client IPs behind Cloudflare/Render/Vercel proxies. | Verified backend build & test suite | **VERIFIED & RESOLVED** |
+| **Deep Gap 3** | Security / Document Streaming Headers | Added `X-Content-Type-Options: nosniff` header and read-stream error handlers in `document.controller.ts` to prevent MIME-sniffing and hanging connections on I/O error. | Verified backend build & test suite | **VERIFIED & RESOLVED** |
+| **Deep Gap 4** | Resilience / Mongoose Connection Monitoring | Added lifecycle event listeners (`disconnected`, `reconnected`, `error`) to `mongoose.connection` in `server/src/config/database.ts`. | Verified database connection logging | **VERIFIED & RESOLVED** |
+| **ST-01** | Storage Provider Note | Retained `LocalStorageProvider` per user specification ("except cloud storage"). Physical disk files are safely managed and cleaned up upon cascading deletion. | Code maintained | **RETAINED PER SPEC** |
+

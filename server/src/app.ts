@@ -18,6 +18,9 @@ import { notificationRoutes } from './modules/notifications/notification.routes.
 export const createApp = (): Express => {
   const app = express();
 
+  // Trust first proxy for Render, Cloudflare, and reverse proxy deployments (INF-01)
+  app.set('trust proxy', 1);
+
   // Basic security headers
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },

@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { AuthService } from './auth.service.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { env } from '../../config/env.js';
@@ -50,7 +51,21 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-export const logout = asyncHandler(async (_req: Request, res: Response) => {
+export const logout = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const cookieToken = req.cookies?.proofcart_session;
+    const token = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.split(' ')[1] : cookieToken;
+    if (token) {
+      const decoded = jwt.verify(token, env.SESSION_SECRET) as any;
+      if (decoded?.id) {
+        await AuthService.revokeTokens(decoded.id);
+      }
+    }
+  } catch {
+    // Ignore verification errors on logout
+  }
+
   clearAuthCookie(res);
   res.status(200).json({
     success: true,
@@ -78,6 +93,26 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
 
 export const changePassword = asyncHandler(async (req: Request, res: Response) => {
   const result = await AuthService.changePassword(req.user!.id, req.body);
+  if (result.token) {
+    setAuthCookie(res, result.token);
+  }
+  res.status(200).json({
+    success: true,
+    data: result,
+  });
+});
+
+export const forgotPassword = asyncHandler(async (req: Request, res: Response) => {
+  const result = await AuthService.requestPasswordReset(req.body);
+  res.status(200).json({
+    success: true,
+    data: result,
+  });
+});
+
+export const resetPassword = asyncHandler(async (req: Request, res: Response) => {
+  const result = await AuthService.resetPasswordWithCode(req.body);
+  clearAuthCookie(res);
   res.status(200).json({
     success: true,
     data: result,

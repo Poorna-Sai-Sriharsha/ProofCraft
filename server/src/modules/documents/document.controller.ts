@@ -33,10 +33,22 @@ export const downloadDocument = asyncHandler(async (req: Request, res: Response)
   );
 
   res.setHeader('Content-Type', mimeType);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader(
     'Content-Disposition',
     `inline; filename="${encodeURIComponent(originalFilename)}"`
   );
+
+  stream.on('error', (err: any) => {
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: { code: 'FILE_STREAM_ERROR', message: 'Failed to read document stream.' },
+      });
+    } else {
+      res.end();
+    }
+  });
 
   stream.pipe(res);
 });

@@ -22,6 +22,17 @@ export const errorHandler: ErrorRequestHandler = (
     });
   }
 
+  // Handle CORS rejection as 403
+  if (err.message && err.message.includes('not allowed by CORS')) {
+    return res.status(403).json({
+      success: false,
+      error: {
+        code: 'CORS_FORBIDDEN',
+        message: err.message,
+      },
+    });
+  }
+
   // 2. Zod Validation Error
   if (err instanceof ZodError) {
     const details = err.errors.map((e) => ({

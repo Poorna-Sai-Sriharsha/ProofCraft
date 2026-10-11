@@ -10,11 +10,13 @@ export class DashboardService {
   static async getSummary(userId: string) {
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
-    // Active purchases only
+    // Active purchases with minimal projection (DB-02)
     const purchases = await Purchase.find({
       userId: userObjectId,
       archivedAt: null,
-    });
+    })
+      .select('currency purchasePrice warrantyStatus warrantyExpiryDate')
+      .lean();
 
     const now = new Date();
     let activeWarranties = 0;
@@ -133,10 +135,17 @@ export class DashboardService {
     const userObjectId = new mongoose.Types.ObjectId(userId);
     const now = new Date();
 
+    // Filter only records that have an expiry or return date set (DB-02)
     const purchases = await Purchase.find({
       userId: userObjectId,
       archivedAt: null,
-    });
+      $or: [
+        { warrantyExpiryDate: { $ne: null } },
+        { returnDeadline: { $ne: null } },
+      ],
+    })
+      .select('productName brand category warrantyExpiryDate returnDeadline')
+      .lean();
 
     const deadlines: Array<{
       purchaseId: string;
