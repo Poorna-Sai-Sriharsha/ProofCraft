@@ -7,7 +7,7 @@
 
 ---
 
-### 📸 Application Preview & Interface Showcase
+### 📸 Application Preview
 
 #### 🏷️ ProofCraft Overview & Asset Catalog
 ![Overview Preview](docs/ProofCraft.png)
